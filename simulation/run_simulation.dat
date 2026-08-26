@@ -83,15 +83,28 @@ FINISH
 ANTYPE,TRANSIENT
 TRNOPT,FULL
 LUMPM,OFF
-
 *DO,step_idx,1,40
     TIME, TIME_STEPS(step_idx)
     DELTIM, 0.005, 0.001, 0.010, ON
     KBC, 0
     
-    ASEL,S,LOC,Z,Z1,Z2
-    SF,ALL,CONV,COOL_H_BASE,FLUID_AMB_T
+    ! ----------------------------------------------------------------------------
+    ! REVISED HIGH-FIDELITY FLUID BOUNDARY CONDITION LAYER
+    ! ----------------------------------------------------------------------------
+    *DO,y_zone,0,10
+        Y_MIN_LOC = y_zone * (CHIP_L / 11)
+        Y_MAX_LOC = (y_zone + 1) * (CHIP_L / 11)
+        
+        ! Calculate thermal boundary layer decay (h degrades deeper into the channel)
+        DYNAMIC_H = COOL_H_BASE * (1.0 - (y_zone * 0.035))
+        
+        ASEL,S,LOC,Z,Z1,Z2
+        ASEL,R,LOC,Y,Y_MIN_LOC,Y_MAX_LOC
+        SF,ALL,CONV,DYNAMIC_H,FLUID_AMB_T
+    *ENDDO
+    ASEL,ALL
     
+    ! Inject transient pulsed core chip load step
     ASEL,S,LOC,Z,0
     SF,ALL,HFLUX,PULSE_FLUX(step_idx)
     
