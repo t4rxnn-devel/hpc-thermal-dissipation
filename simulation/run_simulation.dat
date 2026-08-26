@@ -1,0 +1,136 @@
+! ============================================================================
+! ANSYS APDL SCRIPT: HPC THERMAL DISSIPATION GRID & STRUCTURAL STRESS PIPELINE
+! ============================================================================
+/BATCH                              ! Run in batch non-interactive mode
+/CLEAR,NOSTART                      ! Clear memory workspace
+
+! ----------------------------------------------------------------------------
+! STEP 1: MATERIAL MATRIX CONFIGURATION (Thermal & Structural Properties)
+! ----------------------------------------------------------------------------
+/PREP7                              ! Enter Preprocessor
+
+! Material 1: Oxygen-Free Electronic Copper (C10100)
+MP,DENS,1,8920                      ! Density (kg/m^3)
+MP,KXX,1,391                        ! Thermal Conductivity (W/m*K)
+MP,C,1,385                          ! Specific Heat (J/kg*K)
+MP,ALPX,1,1.7e-5                    ! CTE (1/K)
+MP,EX,1,1.15e11                     ! Young's Modulus (Pa)
+MP,PRXY,1,0.33                      ! Poisson's Ratio
+
+! Material 2: Aluminum 6061-T6
+MP,DENS,2,2700                      
+MP,KXX,2,167                        
+MP,C,2,896                          
+MP,ALPX,2,2.3e-5                    
+MP,EX,2,6.89e10                     
+MP,PRXY,2,0.33                      
+
+! Material 3: Aluminum Nitride (AlN)
+MP,DENS,3,3260                      
+MP,KXX,3,170                        
+MP,C,3,740                          
+MP,ALPX,3,4.5e-6                    
+MP,EX,3,3.1e11                      
+MP,PRXY,3,0.24
+
+! Material 4: Beryllium Copper (C17200)
+MP,DENS,4,8250                      
+MP,KXX,4,105                        
+MP,C,4,420                          
+MP,ALPX,4,1.7e-5                    
+MP,EX,4,1.3e11                      
+MP,PRXY,4,0.30
+
+! Material 5: Silicon Carbide (SiC)
+MP,DENS,5,3210                      
+MP,KXX,5,120                        
+MP,C,5,750                          
+MP,ALPX,5,4.0e-6                    
+MP,EX,5,4.1e11                      
+MP,PRXY,5,0.14
+
+! ----------------------------------------------------------------------------
+! STEP 2: GEOMETRY ENGINE (Parametric Grid Modeling)
+! ----------------------------------------------------------------------------
+DIE_W = 0.020                       ! Die width (20mm)
+DIE_L = 0.020                       ! Die length (20mm)
+DIE_H = 0.001                       ! Die thickness (1mm)
+SINK_H = 0.005                      ! Heatsink base thickness (5mm)
+
+! Generate solid volume geometry blocks
+BLOCK, 0, DIE_W, 0, DIE_L, 0, DIE_H                  ! Volume 1: Silicon Die
+BLOCK, 0, DIE_W, 0, DIE_L, DIE_H, DIE_H+SINK_H        ! Volume 2: Dissipation Grid Base
+VGLUE, ALL                                           ! Glue interfaces for conformal mesh
+
+! ----------------------------------------------------------------------------
+! STEP 3: THERMAL ANALYSIS ENGINE
+! ----------------------------------------------------------------------------
+ET,1,SOLID70                        ! Use 3D Thermal Solid Elements (8 nodes)
+
+! Assign materials to volumes
+VSEL,S,VOLU,,1
+VATT,5,,1                           ! Target SiC Matrix (Mat 5) for the Die
+VSEL,S,VOLU,,2
+VATT,1,,1                           ! Target OFE Copper (Mat 1) for the Dissipation Grid
+VALL
+
+! Generate Managed Mesh Configuration
+MSHAPE,0,3D                         ! Hexahedral element structures
+MSHKEY,1                            ! Mapped mesh configuration
+ESIZE,0.001                         ! Grid global sizing: 1mm elements
+VMESH,ALL
+FINISH
+
+! Run Thermal Solver
+/SOLU
+ANTYPE,STATIC                       ! Steady-state thermal execution 
+
+! Apply Thermal Boundaries
+SFA,1,1,CONV,500,25                 ! Convective Fluid Boundary: 500 W/m^2K at 25C reference fluid
+SFA,2,1,HFLUX,1500000               ! Core Heat Flux: 1.5 MW/m^2 (150 W/cm^2) applied underneath
+SOLVE
+FINISH
+
+! Save intermediate thermal nodal temperature map file
+/POST1
+SET,LAST
+EDWRITE,THERM_TEMP                  ! Write nodal thermal gradient table
+FINISH
+
+! ----------------------------------------------------------------------------
+! STEP 4: SEQUENTIAL STRUCTURAL STRESS ENGINE
+! ----------------------------------------------------------------------------
+/PREP7
+ET,1,SOLID185                       ! Switch to 3D Structural Solid Elements (8 nodes)
+
+! Apply mechanical mounting constraints 
+ASEL,S,LOC,Z,0                      ! Select base area
+DA,ALL,UX,0                         ! Fixed support restrictions to avoid rigid body motion
+DA,ALL,UY,0
+DA,ALL,UZ,0
+ASEL,ALL
+FINISH
+
+! Run Structural Physics Engine
+/SOLU
+ANTYPE,STATIC
+TREF,25                             ! Reference zero-strain thermal baseline (25C)
+LDREAD,TEMP,,,LAST,,THERM_TEMP,rth  ! Read and map the thermal node gradients as loads
+SOLVE
+FINISH
+
+! ----------------------------------------------------------------------------
+! STEP 5: AUTOMATED REPORT GENERATION & DATA EXPORT
+! ----------------------------------------------------------------------------
+/POST1
+SET,LAST
+
+! Export parsed Node reports for the Python scripting tool to ingest
+/OUTPUT,simulation/thermal_solution_nodes,txt
+PRNSOL,TEMP                         ! Print nodal temperatures
+/OUTPUT
+
+/OUTPUT,simulation/structural_stress_nodes,txt
+PRNSOL,S,EQV                        ! Print Von Mises Equivalent stresses
+/OUTPUT
+FINISH
