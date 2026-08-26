@@ -17,7 +17,7 @@ def parse_ansys_report(file_path):
 
 def analyze_hpc_grid_metrics(thermal_file, stress_file, temp_limit=85.0, stress_limit_mpa=150.0):
     print("="*60)
-    print("🚀 DISPENSATION GRID PERFORMANCE ANLYSIS REPORT")
+    print("🚀 DISPENSATION GRID PERFORMANCE ANALYSIS REPORT")
     print("="*60)
     
     # 1. Evaluate Thermal Results
@@ -44,7 +44,7 @@ def analyze_hpc_grid_metrics(thermal_file, stress_file, temp_limit=85.0, stress_
     print("="*60)
 
 if __name__ == "__main__":
-    # Target placeholders mapped to automated export tasks inside workbench journals
+    # Target file layouts exported directly by APDL
     thermal_out = "simulation/thermal_solution_nodes.txt"
     stress_out = "simulation/structural_stress_nodes.txt"
     
