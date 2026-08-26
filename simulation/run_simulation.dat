@@ -50,17 +50,26 @@ MP,EX,5,4.1e11
 MP,PRXY,5,0.14
 
 ! ----------------------------------------------------------------------------
-! STEP 2: GEOMETRY ENGINE (Parametric Grid Modeling)
+! STEP 2: GEOMETRY ENGINE (Importing Procedural CAD STEP File)
 ! ----------------------------------------------------------------------------
 DIE_W = 0.020                       ! Die width (20mm)
 DIE_L = 0.020                       ! Die length (20mm)
 DIE_H = 0.001                       ! Die thickness (1mm)
-SINK_H = 0.005                      ! Heatsink base thickness (5mm)
 
-! Generate solid volume geometry blocks
-BLOCK, 0, DIE_W, 0, DIE_L, 0, DIE_H                  ! Volume 1: Silicon Die
-BLOCK, 0, DIE_W, 0, DIE_L, DIE_H, DIE_H+SINK_H        ! Volume 2: Dissipation Grid Base
-VGLUE, ALL                                           ! Glue interfaces for conformal mesh
+! Volume 1: Generate the Silicon Die Substrate internally
+BLOCK, 0, DIE_W, 0, DIE_L, 0, DIE_H                  
+
+! Volume 2+: Import the procedurally generated Micro-Channel Grid STEP asset
+! Note: APDL units are meters, so we scale the millimeter STEP import down by 0.001
+/AUX15
+IAME_TOOL = 'STEP'
+~STEPIN,'grid_heatsink','step','geometry\',ext,0.001
+/PREP7
+
+! Glue the die substrate and the imported complex heat sink volumes 
+! This creates a clean, shared topology interface for a perfect conformal mesh
+VGLUE, ALL                                           
+
 
 ! ----------------------------------------------------------------------------
 ! STEP 3: THERMAL ANALYSIS ENGINE
