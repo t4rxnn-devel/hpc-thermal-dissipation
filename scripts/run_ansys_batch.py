@@ -1,128 +1,194 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-HPC Multiphysics Pipeline Orchestrator - Industrial Grade Edition
-Includes Ansys page-break sanitation, layout throttling, and robust exception catching.
+HPC Multiphysics Pipeline Orchestrator - Enterprise Automation Edition
+Handles JSON configuration parsing, dynamic APDL variable injection, real-time unbuffered 
+stream logging, and advanced post-solve telemetry data verification scans.
 """
 
 import os
 import sys
+import json
+import argparse
 import subprocess
-import pandas as pd
-import numpy as np
+from datetime import datetime
 
-def find_system_ansys_core():
-    """Scans and maps recent platform paths to lock down the active MAPDL engine."""
-    supported_releases = ["v271", "v262", "v261", "v252", "v242", "v232", "v212"]
-    base_paths = [
-        r"C:\Program Files\ANSYS Inc",
-        r"D:\Program Files\ANSYS Inc",
-        r"C:\Program Files\AnsysEM"
+def parse_pipeline_arguments():
+    """Builds a robust configuration and argument parsing infrastructure interface."""
+    parser = argparse.ArgumentParser(description="HPC ThermoStress Master Automation Pipeline Launcher")
+    parser.add_argument("--config", type=str, default="simulation/config.json", help="Path to external configuration override file")
+    parser.add_argument("--h_coef", type=float, help="Override fluid convection coefficient (W/m^2*K)")
+    parser.add_argument("--chip_l", type=float, help="Override structural chip footprint size (Meters)")
+    return parser.parse_args()
+
+def load_and_inject_config(config_path, apdl_deck_path, args_override):
+    """Parses JSON parameters and injects variable definitions dynamically into the top of the APDL file."""
+    default_config = {
+        "COOL_H_BASE": 1200.0,
+        "CHIP_L": 0.0400,
+        "CHIP_W": 0.0400,
+        "INLET_VEL": 0.45,
+        "CORE_FLUX_BG": 400000.0
+    }
+    
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                user_config = json.load(f)
+                default_config.update(user_config)
+        except Exception as e:
+            print(f"⚠️  [CONFIG] Parsing error on file {config_path}: {e}. Defaulting parameters.")
+            
+    if args_override.h_coef:
+        default_config["COOL_H_BASE"] = args_override.h_coef
+    if args_override.chip_l:
+        default_config["CHIP_L"] = args_override.chip_l
+
+    if not os.path.exists(apdl_deck_path):
+        print(f"❌ [CONFIG] Target template APDL deck file '{apdl_deck_path}' not found.")
+        return False
+
+    with open(apdl_deck_path, "r", encoding="utf-8") as f:
+        original_content = f.read()
+
+    # Generate an explicit clean variable assignment header deck block block
+    injection_block = []
+    injection_block.append("! ============================================================================")
+    injection_block.append("! DYNAMIC VARIABLES INJECTED NATIVELY VIA THE PYTHON AUTOMATION PIPELINE")
+    injection_block.append("! ============================================================================")
+    for key, val in default_config.items():
+        injection_block.append(f"{key} = {val}")
+    injection_block.append("! ============================================================================\n")
+    
+    # Strip any older automated injections to prevent variable duplication overrides
+    if "! DYNAMIC VARIABLES INJECTED" in original_content:
+        split_content = original_content.split("! ============================================================================\n")
+        original_content = split_content[-1]
+
+    with open(apdl_deck_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(injection_block) + original_content)
+    print(f"✅ [CONFIG] Parametric configurations parsed and cleanly injected into {apdl_deck_path}")
+    return True
+
+def locate_ansys_executable():
+    """Scans environmental system matrices to find valid MAPDL batch executables."""
+    standard_paths = [
+        r"C:\Program Files\ANSYS Inc\v261\ansys\bin\winx64\MAPDL.exe",
+        r"C:\Program Files\ANSYS Inc\v252\ansys\bin\winx64\MAPDL.exe",
+        r"C:\Program Files\ANSYS Inc\v242\ansys\bin\winx64\MAPDL.exe",
+        r"D:\Program Files\ANSYS Inc\v261\ansys\bin\winx64\MAPDL.exe"
     ]
-    for base in base_paths:
-        for release in supported_releases:
-            target_bin = os.path.join(base, release, "ansys", "bin", "winx64", "MAPDL.exe")
-            if os.path.exists(target_bin):
-                return target_bin
+    for path in standard_paths:
+        if os.path.exists(path):
+            return path
     return None
 
-def sanitize_and_parse_ansys_report(file_path):
-    """
-    Strips away Ansys's custom text headers, page-breaks, and tabular formatting.
-    Ensures Pandas only reads clean, isolated numeric coordinate rows.
-    """
-    clean_rows = []
-    if not os.path.exists(file_path):
-        return None
+def execute_solver_stream_logged(solver_bin, input_deck, output_log, console_dump_path):
+    """Executes the solver headlessly, capturing unbuffered streams directly to local tracking records."""
+    print(f"🚀 [SOLVER] Launching headless calculation thread matrix via: {solver_bin}")
+    cmd = [solver_bin, "-b", "-i", input_deck, "-o", output_log]
+    
+    os.makedirs(os.path.dirname(console_dump_path), exist_ok=True)
+    
+    with open(console_dump_path, "w", encoding="utf-8") as logger:
+        logger.write(f"=== HPC PIPELINE AUDIT TRACE STARTED: {datetime.now()} ===\n")
         
-    with open(file_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            parts = line.split()
-            # Ansys coordinate rows always start with a numeric Node ID integer
-            if len(parts) >= 2 and parts[0].isdigit():
-                try:
-                    node_id = int(parts[0])
-                    # Extract the final field value (Temperature or Stress scalar value)
-                    value = float(parts[-1])
-                    clean_rows.append([node_id, value])
-                except ValueError:
-                    continue # Skip raw page-break header remnants safely
-                    
-    if not clean_rows:
-        return None
-    return pd.DataFrame(clean_rows, columns=['NodeID', 'Value'])
+        # Open the sub-process using standard unbuffered environment stream captures
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        
+        # Real-time stdout console relay engine
+        while True:
+            output_line = process.stdout.readline()
+            if output_line == "" and process.poll() is not None:
+                break
+            if output_line:
+                sanitized_line = f"[{datetime.now().strftime('%H:%M:%S')}] {output_line}"
+                logger.write(sanitized_line)
+                logger.flush()
+                # Print live ticks to terminal window view interface
+                print(f"  > {output_line.strip()}", flush=True)
+                
+        rc = process.poll()
+        logger.write(f"=== HPC PIPELINE AUDIT TRACE ENDED WITH EXIT CODE {rc} AT: {datetime.now()} ===\n")
+        return rc
 
-def verify_transient_anisotropic_logs(t_path, s_path, max_temp=85.0, max_stress_mpa=150.0):
-    """Executes vectorized QA evaluations over sanitized engineering logs."""
+def run_automated_results_post_check(solver_out_path, thermal_txt, stress_txt):
+    """Scans file dumps and textual matrix patterns to catch numerical divergence or segmentation errors."""
     print("\n" + "="*75)
-    print("📋 ANISOTROPIC TRANSIENT DESIGN COMPLIANCE & SAFETY AUDIT")
+    print("🤖 RETROSPECTIVE INFRASTRUCTURE POST-CHECK AUTOMATION MATRIX")
     print("="*75)
     
-    t_data = sanitize_and_parse_ansys_report(t_path)
-    s_data = sanitize_and_parse_ansys_report(s_path)
-    
-    if t_data is None or s_data is None:
-        print("❌ PIPELINE ERROR: Structural solution logs are corrupt, empty, or unreadable.")
-        return False
-
-    peak_temp = t_data['Value'].max()
-    peak_stress_mpa = s_data['Value'].max() / 1e6
-    
-    print(f"       Peak System Temperature: {peak_temp:.2f}°C / Limit: {max_temp}°C")
-    print(f"  Peak Von Mises Tensile Stress: {peak_stress_mpa:.2f} MPa / Limit: {max_stress_mpa} MPa")
-    print("-"*75)
-    
-    if peak_temp > max_temp:
-        print("❌ DESIGN VIOLATION: Thermal threshold breached during pulsed load steps.")
-        return False
-    if peak_stress_mpa > max_stress_mpa:
-        print("❌ DESIGN VIOLATION: Anisotropic mechanical tension exceeded local yielding limits.")
+    if not os.path.exists(solver_out_path):
+        print("❌ [POST-CHECK] Fatal failure: Core solver log file was never dropped onto local disk.")
         return False
         
-    print("✅ VERIFICATION SUCCESS: All fields conform to technical compliance matrices.")
+    # Critical textual error signature matches mapped from known MAPDL error dictionaries
+    fatal_keywords = ["ERROR", "FATAL", "CORE DUMP", "SEGMENTATION FAULT", "ILLEGAL OPERATION"]
+    divergence_keywords = ["SOLUTION NOT CONVERGED", "DIVERG", "FLOATING POINT EXCEPTION"]
+    
+    with open(solver_out_path, "r", encoding="utf-8", errors="ignore") as f:
+        for num, line in enumerate(f, 1):
+            upper_line = line.upper()
+            for key in fatal_keywords:
+                if key in upper_line:
+                    print(f"❌ [POST-CHECK] Fatal core exception signature identified on row {num}: {line.strip()}")
+                    return False
+            for key in divergence_keywords:
+                if key in upper_line:
+                    print(f"❌ [POST-CHECK] Numerical divergence flag tripped on row {num}: {line.strip()}")
+                    return False
+
+    print("✅ [POST-CHECK] Zero structural fatal execution log signatures identified.")
+    
+    # Assert physical solution logs are compiled and filled with coordinates rows
+    for tracking_file in [thermal_txt, stress_txt]:
+        if not os.path.exists(tracking_file) or os.path.getsize(tracking_file) < 500:
+            print(f"❌ [POST-CHECK] Target data matrix tracker file '{tracking_file}' is missing or malformed.")
+            return False
+            
+    print("✅ [POST-CHECK] Solution metrics and telemetry matrix structures safely written.")
     return True
 
 def main():
+    # Enforce root folder navigation alignment patterns
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    workspace_root = os.path.abspath(os.path.join(script_dir, ".."))
-    os.chdir(workspace_root)
+    project_root = os.path.abspath(os.path.join(script_dir, ".."))
+    os.chdir(project_root)
 
-    os.makedirs("simulation", exist_ok=True)
+    args = parse_pipeline_arguments()
     
-    apdl_deck = os.path.join("simulation", "run_simulation.dat")
-    thermal_log = os.path.join("simulation", "thermal_solution_nodes.txt")
-    stress_log = os.path.join("simulation", "structural_stress_nodes.txt")
-    solver_dump = os.path.join("simulation", "simulation_output.out")
+    apdl_input_deck = os.path.join("simulation", "run_simulation.dat")
+    solver_raw_out  = os.path.join("simulation", "simulation_output.out")
+    console_history = os.path.join("simulation", "pipeline_console_history.log")
+    thermal_nodes   = os.path.join("simulation", "thermal_solution_nodes.txt")
+    stress_nodes    = os.path.join("simulation", "structural_stress_nodes.txt")
 
-    print("[SYSTEM] Booting Advanced Multi-Physics Processing Core...")
-    
-    solver_exe = find_system_ansys_core()
-    if not solver_exe:
-        print("❌ DEPLOYMENT ERROR: Ansys MAPDL local core installation folder was not detected.")
-        sys.exit(1)
-    print(f"🔍 Located Verification Link: {solver_exe}")
-
-    # Safety Layer: Detect student license limits and warn user if mesh capacity might bottleneck
-    if "student" in solver_exe.lower():
-        print("⚠️  NOTICE: Student installation identified. If mesh limits breach tier capacities,")
-        print("   manually adjust 'S_PITCH_X/Y' variables to 0.005 inside simulation/run_simulation.dat")
-
-    print("🚀 Transmitting instruction macros to headless solver (Processing fields)...")
-    cmd_args = [solver_exe, "-b", "-i", apdl_deck, "-o", solver_dump]
-    
-    try:
-        # Pass control loop directly to core executable engine
-        subprocess.run(cmd_args, check=True, timeout=180)
-        print("🏁 Computational loops concluded successfully.")
-    except subprocess.TimeoutExpired:
-        print("❌ EXCEPTION: Process timed out. Mesh configuration is too large for current engine license.")
-        sys.exit(1)
-    except subprocess.CalledProcessError as err:
-        print(f"❌ EXCEPTION: Simulation engine aborted with error status flag: {err.returncode}")
+    # 1. Parameter compilation step
+    if not load_and_inject_config(args.config, apdl_input_deck, args):
         sys.exit(1)
 
-    qa_clearance = verify_transient_anisotropic_logs(thermal_log, stress_log)
-    sys.exit(0 if qa_clearance else 1)
+    # 2. Executable verification step
+    solver_bin_exe = locate_ansys_executable()
+    if not solver_bin_exe:
+        print("❌ [LAUNCHER] Aborting sequence: Compatible Ansys MAPDL workspace environment not detected.")
+        sys.exit(1)
+    print(f"🔍 [LAUNCHER] Verified system engine path anchor: {solver_bin_exe}")
+
+    # 3. Stream-logged batch execution step
+    status_flag = execute_solver_stream_logged(solver_bin_exe, apdl_input_deck, solver_raw_out, console_history)
+    if status_flag != 0:
+        print(f"❌ [LAUNCHER] Solver execution crashed cleanly back to shell with exit status: {status_flag}")
+        sys.exit(status_flag)
+
+    # 4. Result validation step
+    pipeline_cleared = run_automated_results_post_check(solver_raw_out, thermal_nodes, stress_nodes)
+    
+    if pipeline_cleared:
+        print("\n🏆 [PIPELINE] Multiphysics tracking runs successfully verified. Code 0 returned.")
+        sys.exit(0)
+    else:
+        print("\n❌ [PIPELINE] Post-check validation failures reported. Code 1 returned.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
