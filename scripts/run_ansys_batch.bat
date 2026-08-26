@@ -1,10 +1,6 @@
 @echo off
 SETLOCAL EnableDelayedExpansion
 
-:: ============================================================================
-:: ANSYS BATCH EXECUTION PIPELINE FOR HPC THERMAL DISSIPATION GRID
-:: ============================================================================
-
 :: Automatically resolve the project root directory relative to this script
 SET "PROJECT_DIR=%~dp0.."
 CD /d "%PROJECT_DIR%"
@@ -13,7 +9,6 @@ echo [START] Initializing HPC Simulation Pipeline Environment...
 echo [INFO] Project Root Directory: %PROJECT_DIR%
 
 :: Set the path to your explicit Ansys MAPDL installation executable
-:: (Update the v261 directory path if using a different version of Ansys)
 SET "ANSYS_MAPDL_EXE=C:\Program Files\ANSYS Inc\v261\ansys\bin\winx64\MAPDL.exe"
 
 :: Verify Ansys executable presence before proceeding
@@ -28,7 +23,6 @@ echo [SOLVER] Processing simulation/run_simulation.dat ...
 
 :: Execute the full multiphysics batch solver core
 "%ANSYS_MAPDL_EXE%" -b -i "simulation\run_simulation.dat" -o "simulation\simulation_output.out"
-
 echo [SOLVER] Ansys execution finished. Raw log saved to simulation/simulation_output.out
 
 :: Verify output result data files were successfully written by the solver
