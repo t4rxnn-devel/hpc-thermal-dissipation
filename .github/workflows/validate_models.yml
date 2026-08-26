@@ -1,0 +1,30 @@
+name: Validate Simulation Workspace
+on: [push, pull_request]
+
+jobs:
+  validate-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Runtime Dependencies
+        run: |
+          pip install pandas
+
+      - name: Check Structural Files Presence
+        run: |
+          test -f simulation/run_simulation.dat || (echo "Error: APDL baseline script missing" && exit 1)
+          test -f scripts/run_ansys_batch.bat || (echo "Error: Windows batch script executor missing" && exit 1)
+          test -f scripts/extract_results.py || (echo "Error: Python post-processing engine missing" && exit 1)
+          echo "All structural simulation assets verified successfully."
+
+      - name: Verify Python Script Compilation Syntax
+        run: |
+          python -m py_compile scripts/extract_results.py
+          echo "Python post-processing code compiles with zero syntax errors."
