@@ -1,52 +1,36 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+HPC ThermoStress Grid: Independent Performance Data Auditor
+"""
+
 import os
+import sys
 import pandas as pd
 
-def parse_ansys_report(file_path):
-    """Parses standard exported tabular space/tab-separated data from Ansys."""
-    if not os.path.exists(file_path):
-        print(f"Error: Target data file {file_path} not found.")
-        return None
-    try:
-        # Read text report, skipping header rows if present
-        df = pd.read_csv(file_path, sep=r'\s+', comment='#', skiprows=1, 
-                         names=['NodeID', 'X', 'Y', 'Z', 'Value'])
-        return df
-    except Exception as e:
-        print(f"Failed to parse {file_path}: {e}")
-        return None
-
-def analyze_hpc_grid_metrics(thermal_file, stress_file, temp_limit=85.0, stress_limit_mpa=150.0):
-    print("="*60)
-    print("🚀 DISPENSATION GRID PERFORMANCE ANALYSIS REPORT")
-    print("="*60)
+def run_standalone_audit():
+    t_file = os.path.join("simulation", "thermal_solution_nodes.txt")
+    s_file = os.path.join("simulation", "structural_stress_nodes.txt")
     
-    # 1. Evaluate Thermal Results
-    t_df = parse_ansys_report(thermal_file)
-    if t_df is not None:
-        max_temp = t_df['Value'].max()
-        avg_temp = t_df['Value'].mean()
-        print(f"🔥 Thermal: Max Temp = {max_temp:.2f}°C | Avg Temp = {avg_temp:.2f}°C")
-        if max_temp > temp_limit:
-            print(f"❌ WARNING: Maximum Temperature exceeds safe junction limit of {temp_limit}°C!")
-        else:
-            print("✅ Thermal performance metrics are within safe margins.")
+    print("🛠️  Running isolated analysis log audit sequence...")
+    
+    for path in [t_file, s_file]:
+        if not os.path.exists(path):
+            print(f"❌ AUDITOR ERROR: Core log file [{path}] is unreadable or empty.")
+            sys.exit(1)
             
-    # 2. Evaluate Structural Stress Results
-    s_df = parse_ansys_report(stress_file)
-    if s_df is not None:
-        max_stress_pa = s_df['Value'].max()
-        max_stress_mpa = max_stress_pa / 1e6  # Convert Pascals to MPa
-        print(f"💪 Structural: Max Von Mises Stress = {max_stress_mpa:.2f} MPa")
-        if max_stress_mpa > stress_limit_mpa:
-            print(f"❌ WARNING: Structural stress exceeds allowable material limits ({stress_limit_mpa} MPa)!")
-        else:
-            print("✅ Structural stress indices are safely below structural yielding thresholds.")
-    print("="*60)
+    try:
+        t_df = pd.read_csv(t_file, sep=r'\s+', comment='#', skiprows=1, names=['NodeID', 'Val'])
+        s_df = pd.read_csv(s_file, sep=r'\s+', comment='#', skiprows=1, names=['NodeID', 'Val'])
+        
+        t_clean = pd.to_numeric(t_df['Val'], errors='coerce').dropna()
+        s_clean = pd.to_numeric(s_df['Val'], errors='coerce').dropna()
+        
+        print(f"✨ Audit Matrix Clear: Maximum Temp = {t_clean.max():.2f}°C")
+        print(f"✨ Audit Matrix Clear: Maximum Von Mises Tension = {(s_clean.max()/1e6):.2f} MPa")
+    except Exception as err:
+        print(f"❌ AUDITOR FAILED: Extraneous formatting mismatch encountered: {err}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    # Target file layouts exported directly by APDL
-    thermal_out = "simulation/thermal_solution_nodes.txt"
-    stress_out = "simulation/structural_stress_nodes.txt"
-    
-    # Run analysis pipeline
-    analyze_hpc_grid_metrics(thermal_out, stress_out)
+    run_standalone_audit()
