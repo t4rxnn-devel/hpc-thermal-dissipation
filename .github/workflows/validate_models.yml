@@ -24,6 +24,13 @@ jobs:
           test -f scripts/extract_results.py || (echo "Error: Python post-processing engine missing" && exit 1)
           echo "All structural simulation assets verified successfully."
 
+      - name: Verify Automated CAD Generation Engine
+        run: |
+          python scripts/generate_cad.py
+          test -f geometry/grid_heatsink.step || (echo "Error: CAD generator failed to yield a valid STEP asset." && exit 1)
+          echo "CAD logic integration checks passed."
+
+
       - name: Verify Python Script Compilation Syntax
         run: |
           python -m py_compile scripts/extract_results.py
