@@ -1,0 +1,52 @@
+# -*- coding: utf-8 -*-
+# Ansys Workbench Automation Journal Script
+# Pipeline: Engineering Data -> Geometry Import -> Steady-State Thermal -> Static Structural
+
+import os
+
+# Define project path parameters dynamically based on repository layout
+working_dir = CreateWindowingFramework().GetProjectDirectory()
+materials_xml = os.path.join(working_dir, "simulation", "material_properties.xml")
+geometry_step = os.path.join(working_dir, "geometry", "hpc_module.step")
+
+print "Initializing HPC Thermal-Structural Coupling Simulation Template..."
+
+# 1. Create a Steady-State Thermal Analysis System
+thermal_template = GetTemplate(Name="Steady-State Thermal", SystemConversionName="None")
+thermal_system = thermal_template.CreateSystem()
+thermal_system.DisplayText = "HPC Grid Thermal Analysis"
+
+# 2. Import custom engineering materials from XML matrix
+engineering_data = thermal_system.GetContainer(ComponentName="Engineering Data")
+engineering_data.ImportEDDB(FilePath=materials_xml, Append=True)
+print "Successfully loaded customized HPC Material library."
+
+# 3. Import CAD STEP Geometry into the Thermal System
+geometry_component = thermal_system.GetContainer(ComponentName="Geometry")
+geometry_component.SetFile(FilePath=geometry_step)
+print "CAD Geometry imported into simulation workspace."
+
+# 4. Create and Link a Static Structural Analysis System for Thermal Stress mapping
+structural_template = GetTemplate(Name="Static Structural", SystemConversionName="None")
+
+# Drag and drop structural template onto the thermal system to link data pipelines
+structural_system = structural_template.CreateSystem(
+    Position="Right",
+    RelativeTo=thermal_system
+)
+structural_system.DisplayText = "Localized Structural Stress Analysis"
+
+# Component linking: Share Engineering Data, share Geometry, transfer Thermal Solutions
+engineering_data_structural = structural_system.GetContainer(ComponentName="Engineering Data")
+engineering_data_structural.TransferFrom(SourceContainer=engineering_data)
+
+geometry_structural = structural_system.GetContainer(ComponentName="Geometry")
+geometry_structural.TransferFrom(SourceContainer=geometry_component)
+
+# Pipe thermal solution nodes directly into structural setup to serve as boundary body loads
+solution_thermal = thermal_system.GetContainer(ComponentName="Solution")
+setup_structural = structural_system.GetContainer(ComponentName="Setup")
+setup_structural.TransferFrom(SourceContainer=solution_thermal)
+
+print "Workflow systems linked seamlessly. Sequential thermal-structural mapping setup complete."
+Save()
