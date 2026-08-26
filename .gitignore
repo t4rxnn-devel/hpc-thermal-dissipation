@@ -1,0 +1,20 @@
+# Ansys Workbench temporary and solver files
+*.wbjn.lock
+*.wbpj.lock
+*_files/
+*.log
+*.err
+*.page
+*.rst
+*.rth
+*.mnt
+*.full
+*.mode
+*.DSP
+*.db
+*.amat
+
+# Python & OS temporary files
+__pycache__/
+*.pyc
+.DS_Store
