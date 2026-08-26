@@ -49,26 +49,34 @@ MP,ALPX,5,4.0e-6
 MP,EX,5,4.1e11                      
 MP,PRXY,5,0.14
 
+
+
+
 ! ----------------------------------------------------------------------------
-! STEP 2: GEOMETRY ENGINE (Importing Procedural CAD STEP File)
+! STEP 2: NATIVE APDL PARAMETRIC GEOMETRY GENERATION (Bulletproof Method)
 ! ----------------------------------------------------------------------------
 DIE_W = 0.020                       ! Die width (20mm)
 DIE_L = 0.020                       ! Die length (20mm)
 DIE_H = 0.001                       ! Die thickness (1mm)
+SINK_H = 0.003                      ! Heatsink base thickness (3mm)
+FIN_H = 0.004                       ! Fin height (4mm)
+FIN_W = 0.002                       ! Individual fin width (2mm)
 
-! Volume 1: Generate the Silicon Die Substrate internally
+! 1. Generate the Silicon Die Block
 BLOCK, 0, DIE_W, 0, DIE_L, 0, DIE_H                  
 
-! Volume 2+: Import the procedurally generated Micro-Channel Grid STEP asset
-! Note: APDL units are meters, so we scale the millimeter STEP import down by 0.001
-/AUX15
-IAME_TOOL = 'STEP'
-~STEPIN,'grid_heatsink','step','geometry\',ext,0.001
-/PREP7
+! 2. Generate the Main Heatsink Base Plate Block
+BLOCK, 0, DIE_W, 0, DIE_L, DIE_H, DIE_H+SINK_H        
 
-! Glue the die substrate and the imported complex heat sink volumes 
-! This creates a clean, shared topology interface for a perfect conformal mesh
+! 3. Use an APDL Loop to build 4 distinct micro-channel fins natively
+*DO,i,0,3
+    X_START = i * 0.005
+    BLOCK, X_START, X_START+FIN_W, 0, DIE_L, DIE_H+SINK_H, DIE_H+SINK_H+FIN_H
+*ENDDO
+
+! 4. Intersect and glue all intersecting regions into an analytical continuum
 VGLUE, ALL                                           
+                                       
 
 
 ! ----------------------------------------------------------------------------
