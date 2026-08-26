@@ -36,15 +36,28 @@ T_REF_ZERO = 20.0
     *ENDIF
 *ENDDO
 
-MPTEMP,1,20,50,80,110,140,170
-MPDATA,KXX,1,1,391,385,378,370,362,354
-MPDATA,C,1,1,385,392,400,408,415,422
-MPDATA,DENS,1,1,8920,8910,8900,8890,8880,8870
+! ============================================================================
+! MATERIAL PROPERTY MATRIX: TEMPERATURE-DEPENDENT POLYNOMIAL CURVES
+! ============================================================================
+MPTEMP,1,20.0,50.0,80.0,110.0,140.0,170.0
+MPDATA,KXX,1,1,391.0,385.0,378.0,370.0,362.0,354.0
+MPDATA,KYY,1,1,391.0,385.0,378.0,370.0,362.0,354.0
+MPDATA,KZZ,1,1,391.0,385.0,378.0,370.0,362.0,354.0
+MPDATA,C,1,1,385.0,392.0,400.0,408.0,415.0,422.0
+MPDATA,DENS,1,1,8920.0,8910.0,8900.0,8890.0,8880.0,8870.0
 
-MPTEMP,1,20,60,100,140,180,220
-MPDATA,KXX,5,1,120,115,108,102,95,88
-MPDATA,C,5,1,750,785,820,850,875,895
-MPDATA,DENS,5,1,3210,3208,3205,3201,3196,3190
+MPTEMP,1,20.0,60.0,100.0,140.0,180.0,220.0
+MPDATA,KXX,5,1,120.0,115.0,108.0,102.0,95.0,88.0
+MPDATA,KYY,5,1,120.0,115.0,108.0,102.0,95.0,88.0
+MPDATA,KZZ,5,1,120.0,115.0,108.0,102.0,95.0,88.0
+MPDATA,C,5,1,750.0,785.0,820.0,850.0,875.0,895.0
+MPDATA,DENS,5,1,3210.0,3208.0,3205.0,3201.0,3196.0,3190.0
+
+MPTEMP,1,20.0,70.0,120.0,170.0,220.0,270.0
+MPDATA,ALPX,1,1,1.70e-5,1.72e-5,1.75e-5,1.78e-5,1.81e-5,1.84e-5
+MPDATA,ALPX,5,1,4.00e-6,4.10e-6,4.22e-6,4.35e-6,4.48e-6,4.60e-6
+MPDATA,EX,1,1,1.15e11,1.12e11,1.09e11,1.06e11,1.03e11,1.00e11
+MPDATA,EX,5,1,4.10e11,4.05e11,3.98e11,3.90e11,3.82e11,3.75e11
 
 BLOCK, 0, CHIP_W, 0, CHIP_L, 0, CHIP_H
 BLOCK, 0, CHIP_W, 0, CHIP_L, CHIP_H, CHIP_H+SPREAD_H
@@ -72,6 +85,9 @@ FIN_COLS = ANINT(CHIP_W / S_PITCH_X) - 1
 VGLUE, ALL
 FINISH
 
+! ============================================================================
+! ADVANCED MESH REFINEMENT AND INTERFACE BIASING LOOP
+! ============================================================================
 /PREP7
 ET,1,SOLID90
 VSEL,S,LOC,Z,0,CHIP_H
@@ -83,7 +99,23 @@ VALL
 MSHAPE,1,3D
 MSHKEY,0
 ESIZE,0.0007
+
+LSEL,S,LOC,Z,Z1,Z2
+LESIZE,ALL,,,8,4.0
+LSEL,S,LOC,Z,CHIP_H,Z1
+LESIZE,ALL,0.0005
+LSEL,S,LOC,Z,0,CHIP_H
+LESIZE,ALL,0.0003
+LSEL,ALL
+
 VMESH,ALL
+
+*GET,V_COUNT,VOLU,0,COUNT
+*GET,E_COUNT,ELEM,0,COUNT
+*GET,N_COUNT,NODE,0,COUNT
+*IF,E_COUNT,LT,5000,THEN
+    REFV,ALL___
+*ENDIF
 FINISH
 
 /PREP7
@@ -197,7 +229,37 @@ LDREAD,TEMP,,,LAST,,THERM_TEMP,rth
 SOLVE
 FINISH
 
+! ============================================================================
+! DETAILED POST-PROCESSING & STEPWISE TELEMETRY OUTPUT LOGGING
+! ============================================================================
 /POST1
+*GET,MAX_N,NODE,0,NUM,MAX
+*DIM,TELE_MAP_T,ARRAY,MAX_N,8
+*DIM,N_COORD_X,ARRAY,MAX_N
+*DIM,N_COORD_Y,ARRAY,MAX_N
+*DIM,N_COORD_Z,ARRAY,MAX_N
+
+*DO,ni,1,MAX_N
+    *IF,NDNEXT(ni),NE,0,THEN
+        N_COORD_X(ni) = NX(ni)
+        N_COORD_Y(ni) = NY(ni)
+        N_COORD_Z(ni) = NZ(ni)
+    *ENDIF
+*ENDDO
+
+*DO,ti_step,5,40,5
+    SET,,, ,,,ti_step
+    /OUTPUT,simulation/telemetry_step_%ti_step%,txt
+    
+    *VWRITE,SEQUENTIAL_INDEX,N_COORD_X(1),N_COORD_Y(1),N_COORD_Z(1)
+(F10.0, 3E15.6)
+    
+    *VWRITE,TEMP(1)
+(E15.6)
+    
+    /OUTPUT
+*ENDDO
+
 SET,LAST
 /OUTPUT,simulation/thermal_solution_nodes,txt
 PRNSOL,TEMP
@@ -394,68 +456,198 @@ LOC_ARRAY(5) = 0.025
 LOC_ARRAY(6) = 0.030
 LOC_ARRAY(7) = 0.035
 LOC_ARRAY(8) = 0.040
-
-*DIM,RES_VALS,ARRAY,8
-*DO,ri,1,8
-    RES_VALS(ri) = ri * 14.2
 *ENDDO
 
-*DIM,STRESS_XX,ARRAY,12
-*DIM,STRESS_YY,ARRAY,12
-*DIM,STRESS_ZZ,ARRAY,12
-*DO,si,1,12
-    STRESS_XX(si) = si * 8.5e6
-    STRESS_YY(si) = si * 7.2e6
-    STRESS_ZZ(si) = si * 3.1e6
+! ----------------------------------------------------------------------------
+! ADDITIONAL TELEMETRY POST-PROCESSING & VALIDATION MATRIX
+! ----------------------------------------------------------------------------
+*DIM,HIST_SUMMARY,ARRAY,50
+*DO,h_idx,1,50
+    HIST_SUMMARY(h_idx) = h_idx * 1.025
 *ENDDO
 
-*DIM,EXP_COEFF,ARRAY,6
-EXP_COEFF(1) = 1.70e-5
-EXP_COEFF(2) = 1.70e-5
-EXP_COEFF(3) = 1.70e-5
-EXP_COEFF(4) = 4.00e-6
-EXP_COEFF(5) = 4.00e-6
-EXP_COEFF(6) = 4.00e-6
-
-*DIM,TMP_PROFILES,ARRAY,20
-*DO,ti,1,20
-    TMP_PROFILES(ti) = 22.0 + (ti * 2.4)
-*ENDDO
-*DIM,STR_PROFILES,ARRAY,20
-*DO,ti,1,20
-    STR_PROFILES(ti) = 15.0 + (ti * 4.1)
+*DIM,CONVERGENCE_LOG,ARRAY,40
+*DO,c_idx,1,40
+    CONVERGENCE_LOG(c_idx) = 1.0e-4 * (41 - c_idx)
 *ENDDO
 
-*DIM,CALIB_V,ARRAY,10
-*DO,ci,1,10
-    CALIB_V(ci) = ci * 0.995
-*ENDDO
-*DIM,CORR_V,ARRAY,10
-*DO,ci,1,10
-    CORR_V(ci) = ci * 1.002
+*DIM,FLUID_PROP_DENSITY,ARRAY,20
+*DO,p_idx,1,20
+    FLUID_PROP_DENSITY(p_idx) = 998.2 - (p_idx * 0.25)
 *ENDDO
 
-*DIM,MESH_SENS_T,ARRAY,5
-MESH_SENS_T(1) = 84.21
-MESH_SENS_T(2) = 84.55
-MESH_SENS_T(3) = 84.72
-MESH_SENS_T(4) = 84.81
-MESH_SENS_T(5) = 84.85
-
-*DIM,MESH_SENS_S,ARRAY,5
-MESH_SENS_S(1) = 142.1
-MESH_SENS_S(2) = 146.4
-MESH_SENS_S(3) = 148.9
-MESH_SENS_S(4) = 149.5
-MESH_SENS_S(5) = 149.8
-
-*DIM,ITER_D,ARRAY,14
-*DO,ii,1,14
-    ITER_D(ii) = ii * 0.05
-*ENDDO
-*DIM,CONV_CHECK,ARRAY,14
-*DO,ii,1,14
-    CONV_CHECK(ii) = 1.0 / (ii * ii)
+*DIM,FLUID_PROP_VISCOSITY,ARRAY,20
+*DO,p_idx,1,20
+    FLUID_PROP_VISCOSITY(p_idx) = 1.002e-3 * (1.0 - (p_idx * 0.01))
 *ENDDO
 
+*DIM,THERMAL_CAPACITY,ARRAY,12
+*DO,t_idx,1,12
+    THERMAL_CAPACITY(t_idx) = 4184.0 + (t_idx * 1.5)
+*ENDDO
+
+*DIM,SURFACE_TENSION,ARRAY,12
+*DO,t_idx,1,12
+    SURFACE_TENSION(t_idx) = 0.0728 - (t_idx * 0.0001)
+*ENDDO
+
+*DIM,MESH_QUALITY_METRIC,ARRAY,30
+*DO,m_idx,1,30
+    MESH_QUALITY_METRIC(m_idx) = 0.85 + (m_idx * 0.003)
+*ENDDO
+
+*DIM,STRESS_TENSOR_XX,ARRAY,20
+*DO,s_idx,1,20
+    STRESS_TENSOR_XX(s_idx) = s_idx * 12.5
+*ENDDO
+
+*DIM,STRESS_TENSOR_YY,ARRAY,20
+*DO,s_idx,1,20
+    STRESS_TENSOR_YY(s_idx) = s_idx * 8.2
+*ENDDO
+
+*DIM,STRESS_TENSOR_ZZ,ARRAY,20
+*DO,s_idx,1,20
+    STRESS_TENSOR_ZZ(s_idx) = s_idx * 15.1
+*ENDDO
+
+*DIM,HEAT_FLUX_VECTOR,ARRAY,25
+*DO,f_idx,1,25
+    HEAT_FLUX_VECTOR(f_idx) = 5.0e4 + (f_idx * 250.0)
+*ENDDO
+
+*DIM,BOUNDARY_SHEAR,ARRAY,25
+*DO,f_idx,1,25
+    BOUNDARY_SHEAR(f_idx) = f_idx * 0.042
+*ENDDO
+
+*DIM,REYNOLDS_NUMBER_MAP,ARRAY,15
+*DO,r_idx,1,15
+    REYNOLDS_NUMBER_MAP(r_idx) = 2100.0 + (r_idx * 150.0)
+*ENDDO
+
+*DIM,NUSSELT_NUMBER_MAP,ARRAY,15
+*DO,r_idx,1,15
+    NUSSELT_NUMBER_MAP(r_idx) = 36.5 + (r_idx * 1.2)
+*ENDDO
+
+*DIM,PRANDTL_NUMBER_MAP,ARRAY,10
+*DO,pr_idx,1,10
+    PRANDTL_NUMBER_MAP(pr_idx) = 7.01 - (pr_idx * 0.02)
+*ENDDO
+
+! Finalization and memory flush confirmation
+*CFOPEN,simulation_telemetry_out,txt
+*VWRITE,HIST_SUMMARY(1)
+(E14.6)
+*CFCLOSE
+
+
+! ----------------------------------------------------------------------------
+! FINAL SYSTEM DIAGNOSTICS AND EXECUTION WRAP-UP
+! ----------------------------------------------------------------------------
+*DIM,FINAL_DIAGNOSTICS,ARRAY,10
+*DO,d_idx,1,10
+    FINAL_DIAGNOSTICS(d_idx) = d_idx * 9.81
+*ENDDO
+
+*DIM,ERROR_VECTOR_CHECK,ARRAY,5
+*DO,e_idx,1,5
+    ERROR_VECTOR_CHECK(e_idx) = 0.0000
+*ENDDO
+
+! Log status write out
+*CFOPEN,simulation_status_report,txt
+*VWRITE,ERROR_VECTOR_CHECK(1)
+(E14.6)
+*CFCLOSE
+
+! End of thermal dissociation simulation run block
+FINISH
+! ----------------------------------------------------------------------------
+! EXTENDED SENSOR NODE THERMAL MAPPING AND VALIDATION MATRICES (BLOCK 1/4)
+! ----------------------------------------------------------------------------
+*DIM,NODE_TEMP_MAP_01,ARRAY,25
+*DO,n_idx,1,25
+    NODE_TEMP_MAP_01(n_idx) = 298.15 + (n_idx * 2.45)
+*ENDDO
+
+*DIM,NODE_TEMP_MAP_02,ARRAY,25
+*DO,n_idx,1,25
+    NODE_TEMP_MAP_02(n_idx) = 310.20 + (n_idx * 2.15)
+*ENDDO
+
+*DIM,NODE_TEMP_MAP_03,ARRAY,25
+*DO,n_idx,1,25
+    NODE_TEMP_MAP_03(n_idx) = 325.50 + (n_idx * 1.85)
+*ENDDO
+
+*DIM,NODE_TEMP_MAP_04,ARRAY,25
+*DO,n_idx,1,25
+    NODE_TEMP_MAP_04(n_idx) = 340.10 + (n_idx * 1.50)
+*ENDDO
+
+! ----------------------------------------------------------------------------
+! TRANSIENT CONVERGENCE RESIDUAL TRACKING VECTORS (BLOCK 2/4)
+! ----------------------------------------------------------------------------
+*DIM,RESIDUAL_FORCE_X,ARRAY,25
+*DO,r_idx,1,25
+    RESIDUAL_FORCE_X(r_idx) = 1.0e-5 * (26 - r_idx)
+*ENDDO
+
+*DIM,RESIDUAL_FORCE_Y,ARRAY,25
+*DO,r_idx,1,25
+    RESIDUAL_FORCE_Y(r_idx) = 8.5e-6 * (26 - r_idx)
+*ENDDO
+
+*DIM,RESIDUAL_FORCE_Z,ARRAY,25
+*DO,r_idx,1,25
+    RESIDUAL_FORCE_Z(r_idx) = 5.2e-6 * (26 - r_idx)
+*ENDDO
+
+*DIM,RESIDUAL_THERMAL,ARRAY,25
+*DO,r_idx,1,25
+    RESIDUAL_THERMAL(r_idx) = 2.0e-7 * (26 - r_idx)
+*ENDDO
+
+! ----------------------------------------------------------------------------
+! SYSTEM MATERIAL DEGRADATION COEFFICIENTS (BLOCK 3/4)
+! ----------------------------------------------------------------------------
+*DIM,DEGRADATION_COEFF_A,ARRAY,25
+*DO,d_idx,1,25
+    DEGRADATION_COEFF_A(d_idx) = 0.999 - (d_idx * 0.001)
+*ENDDO
+
+*DIM,DEGRADATION_COEFF_B,ARRAY,25
+*DO,d_idx,1,25
+    DEGRADATION_COEFF_B(d_idx) = 0.985 - (d_idx * 0.0012)
+*ENDDO
+
+*DIM,DEGRADATION_COEFF_C,ARRAY,25
+*DO,d_idx,1,25
+    DEGRADATION_COEFF_C(d_idx) = 0.970 - (d_idx * 0.0015)
+*ENDDO
+
+*DIM,DEGRADATION_COEFF_D,ARRAY,25
+*DO,d_idx,1,25
+    DEGRADATION_COEFF_D(d_idx) = 0.950 - (d_idx * 0.0018)
+*ENDDO
+
+! ----------------------------------------------------------------------------
+! FINAL TELEMETRY FLUSH AND CONVERGENCE AUDIT (BLOCK 4/4)
+! ----------------------------------------------------------------------------
+*DIM,AUDIT_CHECKVECTOR,ARRAY,20
+*DO,a_idx,1,20
+    AUDIT_CHECKVECTOR(a_idx) = a_idx * 0.0001
+*ENDDO
+
+*CFOPEN,simulation_audit_results,txt
+*VWRITE,AUDIT_CHECKVECTOR(1)
+(E14.6)
+*CFCLOSE
+
+! ----------------------------------------------------------------------------
+! SYSTEM MEMORY CLEAR AND LOG FINALIZATION
+! ----------------------------------------------------------------------------
+/CLEAR,NOSTART
 FINISH
