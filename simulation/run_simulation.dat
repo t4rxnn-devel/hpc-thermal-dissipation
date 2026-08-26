@@ -647,6 +647,29 @@ FINISH
 *CFCLOSE
 
 ! ----------------------------------------------------------------------------
+! DYNAMIC TELEMETRY REDIRECTION AND STEP-WISE OUTPUT EXPORT
+! ----------------------------------------------------------------------------
+*DO,ti_step,5,40,5
+    SET,,, ,,,ti_step
+    
+    ! Create an explicit string variable using native APDL parameter concatenation
+    *CFOPEN,simulation/telemetry_redirect,txt
+    *VWRITE,ti_step
+/OUTPUT,simulation/telemetry_step_%I,txt
+    *CFCLOSE
+    
+    /INPUT,simulation/telemetry_redirect,txt
+    
+    *VWRITE,SEQUENTIAL_INDEX,N_COORD_X(1),N_COORD_Y(1),N_COORD_Z(1)
+(F10.0, 3E15.6)
+    
+    *VWRITE,TEMP(1)
+(E15.6)
+    
+    /OUTPUT
+*ENDDO
+
+! ----------------------------------------------------------------------------
 ! SYSTEM MEMORY CLEAR AND LOG FINALIZATION
 ! ----------------------------------------------------------------------------
 /CLEAR,NOSTART
