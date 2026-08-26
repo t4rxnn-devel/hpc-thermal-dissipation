@@ -22,7 +22,7 @@ def parse_pipeline_arguments():
     return parser.parse_args()
 
 def load_and_inject_config(config_path, apdl_deck_path, args_override):
-    """Parses JSON parameters and injects variable definitions dynamically into the top of the APDL file."""
+    """Safely updates APDL configuration matrices using explicit boundary tokens."""
     default_config = {
         "COOL_H_BASE": 1200.0,
         "CHIP_L": 0.0400,
@@ -34,10 +34,9 @@ def load_and_inject_config(config_path, apdl_deck_path, args_override):
     if os.path.exists(config_path):
         try:
             with open(config_path, "r", encoding="utf-8") as f:
-                user_config = json.load(f)
-                default_config.update(user_config)
+                default_config.update(json.load(f))
         except Exception as e:
-            print(f"⚠️  [CONFIG] Parsing error on file {config_path}: {e}. Defaulting parameters.")
+            print(f"⚠️  [CONFIG] Error reading {config_path}: {e}")
             
     if args_override.h_coef:
         default_config["COOL_H_BASE"] = args_override.h_coef
@@ -45,30 +44,40 @@ def load_and_inject_config(config_path, apdl_deck_path, args_override):
         default_config["CHIP_L"] = args_override.chip_l
 
     if not os.path.exists(apdl_deck_path):
-        print(f"❌ [CONFIG] Target template APDL deck file '{apdl_deck_path}' not found.")
+        print(f"❌ [CONFIG] File '{apdl_deck_path}' not found.")
         return False
 
     with open(apdl_deck_path, "r", encoding="utf-8") as f:
-        original_content = f.read()
+        lines = f.readlines()
 
-    # Generate an explicit clean variable assignment header deck block block
-    injection_block = []
-    injection_block.append("! ============================================================================")
-    injection_block.append("! DYNAMIC VARIABLES INJECTED NATIVELY VIA THE PYTHON AUTOMATION PIPELINE")
-    injection_block.append("! ============================================================================")
+    # Isolate and strip out any older dynamic configurations safely
+    clean_lines = []
+    skip = False
+    for line in lines:
+        if "START_DYNAMIC_CONFIG" in line:
+            skip = True
+            continue
+        if "END_DYNAMIC_CONFIG" in line:
+            skip = False
+            continue
+        if not skip:
+            clean_lines.append(line)
+
+    # Re-compile clean variable blocks with non-destructive markers
+    injection = [
+        "! START_DYNAMIC_CONFIG\n",
+        "! ============================================================================\n"
+    ]
     for key, val in default_config.items():
-        injection_block.append(f"{key} = {val}")
-    injection_block.append("! ============================================================================\n")
-    
-    # Strip any older automated injections to prevent variable duplication overrides
-    if "! DYNAMIC VARIABLES INJECTED" in original_content:
-        split_content = original_content.split("! ============================================================================\n")
-        original_content = split_content[-1]
+        injection.append(f"{key} = {val}\n")
+    injection.append("! ============================================================================\n")
+    injection.append("! END_DYNAMIC_CONFIG\n")
 
     with open(apdl_deck_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(injection_block) + original_content)
-    print(f"✅ [CONFIG] Parametric configurations parsed and cleanly injected into {apdl_deck_path}")
+        f.write("".join(injection) + "".join(clean_lines))
+    print(f"✅ [CONFIG] Configurations successfully updated inside {apdl_deck_path}")
     return True
+
 
 def locate_ansys_executable():
     """Scans environmental system matrices to find valid MAPDL batch executables."""
