@@ -20,8 +20,8 @@ Where:
 
 ### 2. Material Selection: OFHC Copper 🪙⚡
 We model the cold plate using **Oxygen-Free High-Conductivity (OFHC) Copper**:
-- **High Conductivity ($k = 0.398 \text{ W}/(\text{mm}\cdot\text{K})$):** Ensures rapid heat transfer away from the core die.
-- **Density ($\rho = 8.94 \times 10^{-3} \text{ g}/\text{mm}^3$) & Heat Capacity ($C_p = 0.385 \text{ J}/(\text{g}\cdot\text{K})$):** Calibrates the precise thermal mass of the system so the transient solver behaves like physical hardware.
+- **High Conductivity (k = 0.398 W/(mm·K)):** Ensures rapid heat transfer away from the core die.
+- **Density (ρ = 8.94 × 10⁻³ g/mm³) & Heat Capacity (Cp = 0.385 J/(g·K)):** Calibrates the precise thermal mass of the system so the transient solver behaves like physical hardware.
 
 ### 3. Numerical Stability (The Courant-Friedrichs-Lewy / CFL Constraint) 🛡️⏱️
 Explicit finite difference methods will violently blow up into infinity (floating-point overflow explosions 💥) if your time step ($\Delta t$) is too large for your spatial grid ($\Delta x, \Delta y$). To keep things mathematically peaceful, our engine dynamically bounds the time step:
